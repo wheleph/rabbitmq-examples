@@ -1,4 +1,4 @@
-package wheleph.rabbitmq_tutorial;
+package wheleph.rabbitmq_tutorial.basic;
 
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
