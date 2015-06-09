@@ -15,46 +15,12 @@ public class ConcurrentRecv {
         final Channel channel = connection.createChannel();
         final Channel channel1 = connection.createChannel();
 
-        channel.queueDeclare(QUEUE_NAME, false, false, false, null);
-        channel.queueBind(QUEUE_NAME, QUEUE_NAME, "");
-
         System.out.println(" [*] Waiting for messages. To exit press CTRL+C");
 
         final boolean autoAck = false;
 
-        Consumer consumer = new DefaultConsumer(channel) {
-            @Override
-            public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                System.out.printf("Received 0/%s %s%n", Thread.currentThread().getName(), new String(body));
-
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException e) {
-                }
-
-                if (!autoAck) {
-                    channel.basicAck(envelope.getDeliveryTag(), false);
-                }
-            }
-        };
-
-        Consumer consumer1 = new DefaultConsumer(channel1) {
-            @Override
-            public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                System.out.printf("Received 1/%s %s%n", Thread.currentThread().getName(), new String(body));
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException e) {
-                }
-
-                if (!autoAck) {
-                    channel1.basicAck(envelope.getDeliveryTag(), false);
-                }
-            }
-        };
-
-        channel.basicConsume(QUEUE_NAME, autoAck, consumer);
-        channel1.basicConsume(QUEUE_NAME, autoAck, consumer1);
+        registerConsumer(channel, autoAck, 500);
+        registerConsumer(channel1, autoAck, 500);
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -67,5 +33,28 @@ public class ConcurrentRecv {
                 System.out.println("Done with shutdown hook.");
             }
         });
+    }
+
+    private static void registerConsumer(final Channel channel, final boolean autoAck, final int timeout) throws IOException {
+        channel.queueDeclare(QUEUE_NAME, false, false, false, null);
+        channel.queueBind(QUEUE_NAME, QUEUE_NAME, "");
+
+        Consumer consumer = new DefaultConsumer(channel) {
+            @Override
+            public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
+                System.out.printf("Received 0/%s %s%n", Thread.currentThread().getName(), new String(body));
+
+                try {
+                    Thread.sleep(timeout);
+                } catch (InterruptedException e) {
+                }
+
+                if (!autoAck) {
+                    channel.basicAck(envelope.getDeliveryTag(), false);
+                }
+            }
+        };
+
+        channel.basicConsume(QUEUE_NAME, autoAck, consumer);
     }
 }
