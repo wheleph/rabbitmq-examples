@@ -35,12 +35,6 @@ public class ConcurrentRecv2 {
             @Override
             public void run() {
                 System.out.println("Invoking shutdown hook...");
-                System.out.println("Closing connection...");
-                try {
-                    connection.close();
-                } catch (IOException e) {
-                }
-                System.out.println("Connection closed.");
                 System.out.println("Shutting down thread pool...");
                 threadPool.shutdownNow();
                 try {
@@ -49,6 +43,13 @@ public class ConcurrentRecv2 {
                     System.out.println("Interrupted while waiting for termination");
                 }
                 System.out.println("Thread pool shut down.");
+                System.out.println("Closing connection...");
+                try {
+                    connection.close();
+                } catch (IOException e) {
+                    System.out.println("Exception while closing a connection");
+                }
+                System.out.println("Connection closed.");
                 System.out.println("Done with shutdown hook.");
             }
         });
