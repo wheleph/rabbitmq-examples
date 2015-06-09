@@ -36,7 +36,7 @@ public class ConcurrentRecv2 {
             public void run() {
                 System.out.println("Invoking shutdown hook...");
                 System.out.println("Shutting down thread pool...");
-                threadPool.shutdownNow();
+                threadPool.shutdown();
                 try {
                     while(!threadPool.awaitTermination(10, TimeUnit.SECONDS));
                 } catch (InterruptedException e) {
