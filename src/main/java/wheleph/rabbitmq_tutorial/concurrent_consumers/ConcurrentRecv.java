@@ -19,8 +19,8 @@ public class ConcurrentRecv {
 
         final boolean autoAck = false;
 
-        registerConsumer(channel, autoAck, 500);
-        registerConsumer(channel1, autoAck, 500);
+        registerConsumer(channel, "0", autoAck, 500);
+        registerConsumer(channel1, "1", autoAck, 500);
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -35,14 +35,14 @@ public class ConcurrentRecv {
         });
     }
 
-    private static void registerConsumer(final Channel channel, final boolean autoAck, final int timeout) throws IOException {
+    private static void registerConsumer(final Channel channel, final String channelName, final boolean autoAck, final int timeout) throws IOException {
         channel.queueDeclare(QUEUE_NAME, false, false, false, null);
         channel.queueBind(QUEUE_NAME, QUEUE_NAME, "");
 
         Consumer consumer = new DefaultConsumer(channel) {
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                System.out.printf("Received 0/%s %s%n", Thread.currentThread().getName(), new String(body));
+                System.out.printf("Received %s/%s %s%n", channelName, Thread.currentThread().getName(), new String(body));
 
                 try {
                     Thread.sleep(timeout);
