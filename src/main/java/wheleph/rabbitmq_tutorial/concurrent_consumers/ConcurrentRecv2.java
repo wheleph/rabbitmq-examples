@@ -9,15 +9,20 @@ import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
 
 import java.io.IOException;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 public class ConcurrentRecv2 {
     private final static String QUEUE_NAME = "hello";
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        final ExecutorService threadPool = Executors.newFixedThreadPool(2);
+        int threadNumber = 2;
+        int queueSize = 100;
+        final ExecutorService threadPool =  new ThreadPoolExecutor(threadNumber, threadNumber,
+                0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<Runnable>(queueSize));
 
         ConnectionFactory connectionFactory = new ConnectionFactory();
         connectionFactory.setHost("localhost");
@@ -62,27 +67,33 @@ public class ConcurrentRecv2 {
         Consumer consumer = new DefaultConsumer(channel) {
             @Override
             public void handleDelivery(String consumerTag, final Envelope envelope, AMQP.BasicProperties properties, final byte[] body) throws IOException {
-                System.out.printf("Received %s/%s %s%n", channelName, Thread.currentThread().getName(), new String(body));
+                try {
+                    System.out.printf("Received %s/%s %s%n", channelName, Thread.currentThread().getName(), new String(body));
 
-                threadPool.submit(new Runnable() {
-                    public void run() {
-                        try {
-                            System.out.printf("Processing %s %s%n", Thread.currentThread().getName(), new String(body));
-                            Thread.sleep(timeout);
-                            System.out.printf("Processed %s %s%n", Thread.currentThread().getName(), new String(body));
+                    threadPool.submit(new Runnable() {
+                        public void run() {
+                            try {
+                                System.out.printf("Processing %s %s%n", Thread.currentThread().getName(), new String(body));
+                                Thread.sleep(timeout);
+                                System.out.printf("Processed %s %s%n", Thread.currentThread().getName(), new String(body));
 
-                            if (!autoAck) {
-                                try {
-                                    getChannel().basicAck(envelope.getDeliveryTag(), false);
-                                } catch (IOException e) {
-                                    e.printStackTrace();
+                                System.out.println(String.format("Sending ack for %s: %b", new String(body), autoAck));
+                                if (!autoAck) {
+                                    try {
+                                        getChannel().basicAck(envelope.getDeliveryTag(), false);
+                                        System.out.println(String.format("Sent ack for %s", new String(body)));
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                    }
                                 }
+                            } catch (InterruptedException e) {
+                                System.out.printf("Interrupted %s %s%n", Thread.currentThread().getName(), new String(body));
                             }
-                        } catch (InterruptedException e) {
-                            System.out.printf("Interrupted %s %s%n", Thread.currentThread().getName(), new String(body));
                         }
-                    }
-                });
+                    });
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         };
 
