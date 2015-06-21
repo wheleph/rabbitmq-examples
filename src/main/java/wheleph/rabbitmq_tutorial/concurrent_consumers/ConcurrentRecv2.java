@@ -7,6 +7,8 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.Consumer;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -15,6 +17,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 public class ConcurrentRecv2 {
+    private static final Logger logger = LoggerFactory.getLogger(ConcurrentRecv2.class);
+
     private final static String QUEUE_NAME = "hello";
 
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -30,37 +34,37 @@ public class ConcurrentRecv2 {
         final Connection connection = connectionFactory.newConnection();
         final Channel channel = connection.createChannel();
 
-        System.out.println(" [*] Waiting for messages. To exit press CTRL+C");
+        logger.info(" [*] Waiting for messages. To exit press CTRL+C");
 
         final boolean autoAck = false;
 
-        registerConsumer(channel, "0", autoAck, 500, threadPool);
+        registerConsumer(channel, autoAck, 500, threadPool);
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                System.out.println("Invoking shutdown hook...");
-                System.out.println("Shutting down thread pool...");
+                logger.info("Invoking shutdown hook...");
+                logger.info("Shutting down thread pool...");
                 threadPool.shutdown();
                 try {
                     while(!threadPool.awaitTermination(10, TimeUnit.SECONDS));
                 } catch (InterruptedException e) {
-                    System.out.println("Interrupted while waiting for termination");
+                    logger.info("Interrupted while waiting for termination");
                 }
-                System.out.println("Thread pool shut down.");
-                System.out.println("Closing connection...");
+                logger.info("Thread pool shut down.");
+                logger.info("Closing connection...");
                 try {
                     connection.close();
                 } catch (IOException e) {
-                    System.out.println("Exception while closing a connection");
+                    logger.info("Exception while closing a connection");
                 }
-                System.out.println("Connection closed.");
-                System.out.println("Done with shutdown hook.");
+                logger.info("Connection closed.");
+                logger.info("Done with shutdown hook.");
             }
         });
     }
 
-    private static void registerConsumer(final Channel channel, final String channelName, final boolean autoAck, final int timeout, final ExecutorService threadPool) throws IOException {
+    private static void registerConsumer(final Channel channel, final boolean autoAck, final int timeout, final ExecutorService threadPool) throws IOException {
         channel.queueDeclare(QUEUE_NAME, false, false, false, null);
         channel.queueBind(QUEUE_NAME, QUEUE_NAME, "");
 
@@ -68,31 +72,31 @@ public class ConcurrentRecv2 {
             @Override
             public void handleDelivery(String consumerTag, final Envelope envelope, AMQP.BasicProperties properties, final byte[] body) throws IOException {
                 try {
-                    System.out.printf("Received %s/%s %s%n", channelName, Thread.currentThread().getName(), new String(body));
+                    logger.info(String.format("Received (channel %d) %s", channel.getChannelNumber(), new String(body)));
 
                     threadPool.submit(new Runnable() {
                         public void run() {
                             try {
-                                System.out.printf("Processing %s %s%n", Thread.currentThread().getName(), new String(body));
+                                logger.info(String.format("Processing %s", new String(body)));
                                 Thread.sleep(timeout);
-                                System.out.printf("Processed %s %s%n", Thread.currentThread().getName(), new String(body));
+                                logger.info(String.format("Processed %s", new String(body)));
 
-                                System.out.println(String.format("Sending ack for %s: %b", new String(body), autoAck));
+                                logger.info(String.format("Sending ack for %s: %b", new String(body), autoAck));
                                 if (!autoAck) {
                                     try {
                                         getChannel().basicAck(envelope.getDeliveryTag(), false);
-                                        System.out.println(String.format("Sent ack for %s", new String(body)));
+                                        logger.info(String.format("Sent ack for %s", new String(body)));
                                     } catch (Exception e) {
-                                        e.printStackTrace();
+                                        logger.error("", e);
                                     }
                                 }
                             } catch (InterruptedException e) {
-                                System.out.printf("Interrupted %s %s%n", Thread.currentThread().getName(), new String(body));
+                                logger.warn(String.format("Interrupted %s", new String(body)));
                             }
                         }
                     });
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    logger.error("", e);
                 }
             }
         };

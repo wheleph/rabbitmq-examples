@@ -1,10 +1,14 @@
 package wheleph.rabbitmq_tutorial.concurrent_consumers;
 
 import com.rabbitmq.client.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 public class ConcurrentRecv {
+    private static final Logger logger = LoggerFactory.getLogger(ConcurrentRecv.class);
+
     private final static String QUEUE_NAME = "hello";
 
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -15,34 +19,34 @@ public class ConcurrentRecv {
         final Channel channel = connection.createChannel();
         final Channel channel1 = connection.createChannel();
 
-        System.out.println(" [*] Waiting for messages. To exit press CTRL+C");
+        logger.info(" [*] Waiting for messages. To exit press CTRL+C");
 
         final boolean autoAck = false;
 
-        registerConsumer(channel, "0", autoAck, 500);
-        registerConsumer(channel1, "1", autoAck, 500);
+        registerConsumer(channel, autoAck, 500);
+        registerConsumer(channel1, autoAck, 500);
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                System.out.println("Invoking shutdown hook...");
+                logger.info("Invoking shutdown hook...");
                 try {
                     connection.close();
                 } catch (IOException e) {
                 }
-                System.out.println("Done with shutdown hook.");
+                logger.info("Done with shutdown hook.");
             }
         });
     }
 
-    private static void registerConsumer(final Channel channel, final String channelName, final boolean autoAck, final int timeout) throws IOException {
+    private static void registerConsumer(final Channel channel, final boolean autoAck, final int timeout) throws IOException {
         channel.queueDeclare(QUEUE_NAME, false, false, false, null);
         channel.queueBind(QUEUE_NAME, QUEUE_NAME, "");
 
         Consumer consumer = new DefaultConsumer(channel) {
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                System.out.printf("Received %s/%s %s%n", channelName, Thread.currentThread().getName(), new String(body));
+                logger.info(String.format("Received (channel %d) %s", channel.getChannelNumber(), new String(body)));
 
                 try {
                     Thread.sleep(timeout);
