@@ -21,6 +21,8 @@ public class MultipleSend {
         Channel channel = connection.createChannel();
 
         channel.exchangeDeclare(QUEUE_NAME, "fanout");
+        channel.queueDeclare(QUEUE_NAME, false, false, false, null);
+        channel.queueBind(QUEUE_NAME, QUEUE_NAME, "");
 
         for (int i = 0; i < 100; i++) {
             String message = "Hello world" + i;
