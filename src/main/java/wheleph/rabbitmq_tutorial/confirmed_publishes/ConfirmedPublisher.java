@@ -1,9 +1,10 @@
 package wheleph.rabbitmq_tutorial.confirmed_publishes;
 
+import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.ConfirmListener;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.Method;
 import com.rabbitmq.client.ShutdownListener;
 import com.rabbitmq.client.ShutdownSignalException;
 import org.slf4j.Logger;
@@ -17,33 +18,40 @@ public class ConfirmedPublisher {
 
     private final static String EXCHANGE_NAME = "confirmed.publishes";
 
+    private static volatile Channel channel;
+
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
         ConnectionFactory connectionFactory = new ConnectionFactory();
         connectionFactory.setHost("localhost");
         connectionFactory.setPort(5672);
 
-        Connection connection = connectionFactory.newConnection();
-        Channel channel = connection.createChannel();
-
-        channel.confirmSelect();
-        channel.addConfirmListener(new ConfirmListener() {
-            public void handleAck(long deliveryTag, boolean multiple) throws IOException {
-                logger.debug(String.format("Received ack for %d (multiple %b)", deliveryTag, multiple));
-            }
-
-            public void handleNack(long deliveryTag, boolean multiple) throws IOException {
-                logger.debug(String.format("Received nack for %d (multiple %b)", deliveryTag, multiple));
-            }
-        });
-
-        channel.addShutdownListener(new ShutdownListener() {
-            public void shutdownCompleted(ShutdownSignalException cause) {
-                logger.error("Channel closed due to error", cause);
-            }
-        });
+        final Connection connection = connectionFactory.newConnection();
 
         for (int i = 0; i < 100; i++) {
-            String message = "Hello world" + channel.getNextPublishSeqNo();
+            if (channel == null) {
+                channel = connection.createChannel();
+                channel.confirmSelect();
+                channel.addShutdownListener(new ShutdownListener() {
+                    public void shutdownCompleted(ShutdownSignalException cause) {
+                        logger.debug("Handling channel shutdown...", cause);
+                        Method reasonMethod = cause.getReason();
+                        if (reasonMethod instanceof AMQP.Channel.Close) {
+                            AMQP.Channel.Close closeMethod = (AMQP.Channel.Close) reasonMethod;
+                            logger.debug("The method is of type Close (replyCode = {})", closeMethod.getReplyCode(), cause);
+                            try {
+                                if (closeMethod.getReplyCode() != 200) {
+                                    // Cannot directly recreate channel here because any blocking call on connection instance here causes deadlock
+                                    channel = null;
+                                }
+                            } catch (Exception e) {
+                                logger.error("Failed to create channel", e);
+                            }
+                        }
+                        logger.error("Done handling channel shutdown...", cause);
+                    }
+                });
+            }
+            String message = "Hello world" + i;
             channel.basicPublish(EXCHANGE_NAME, "", null, message.getBytes());
             logger.info(" [x] Sent '" + message + "'");
             Thread.sleep(2000);
