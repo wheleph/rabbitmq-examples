@@ -29,27 +29,7 @@ public class ConfirmedPublisher {
 
         for (int i = 0; i < 100; i++) {
             if (channel == null) {
-                channel = connection.createChannel();
-                channel.confirmSelect();
-                channel.addShutdownListener(new ShutdownListener() {
-                    public void shutdownCompleted(ShutdownSignalException cause) {
-                        logger.debug("Handling channel shutdown...", cause);
-                        Method reasonMethod = cause.getReason();
-                        if (reasonMethod instanceof AMQP.Channel.Close) {
-                            AMQP.Channel.Close closeMethod = (AMQP.Channel.Close) reasonMethod;
-                            logger.debug("The method is of type Close (replyCode = {})", closeMethod.getReplyCode(), cause);
-                            try {
-                                if (closeMethod.getReplyCode() != 200) {
-                                    // Cannot directly recreate channel here because any blocking call on connection instance here causes deadlock
-                                    channel = null;
-                                }
-                            } catch (Exception e) {
-                                logger.error("Failed to create channel", e);
-                            }
-                        }
-                        logger.error("Done handling channel shutdown...", cause);
-                    }
-                });
+                createChannel(connection);
             }
             String message = "Hello world" + i;
             channel.basicPublish(EXCHANGE_NAME, "", null, message.getBytes());
@@ -59,5 +39,29 @@ public class ConfirmedPublisher {
 
         channel.close();
         connection.close();
+    }
+
+    private static void createChannel(Connection connection) throws IOException {
+        channel = connection.createChannel();
+        channel.confirmSelect();
+        channel.addShutdownListener(new ShutdownListener() {
+            public void shutdownCompleted(ShutdownSignalException cause) {
+                logger.debug("Handling channel shutdown...", cause);
+                Method reasonMethod = cause.getReason();
+                if (reasonMethod instanceof AMQP.Channel.Close) {
+                    AMQP.Channel.Close closeMethod = (AMQP.Channel.Close) reasonMethod;
+                    logger.debug("The method is of type Close (replyCode = {})", closeMethod.getReplyCode(), cause);
+                    try {
+                        if (closeMethod.getReplyCode() != 200) {
+                            // Cannot directly recreate channel here because any blocking call on connection instance here causes deadlock
+                            channel = null;
+                        }
+                    } catch (Exception e) {
+                        logger.error("Failed to create channel", e);
+                    }
+                }
+                logger.error("Done handling channel shutdown...", cause);
+            }
+        });
     }
 }
