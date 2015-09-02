@@ -4,6 +4,8 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConfirmListener;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.ShutdownListener;
+import com.rabbitmq.client.ShutdownSignalException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +33,12 @@ public class ConfirmedPublisher {
 
             public void handleNack(long deliveryTag, boolean multiple) throws IOException {
                 logger.debug(String.format("Received nack for %d (multiple %b)", deliveryTag, multiple));
+            }
+        });
+
+        channel.addShutdownListener(new ShutdownListener() {
+            public void shutdownCompleted(ShutdownSignalException cause) {
+                logger.error("Channel closed due to error", cause);
             }
         });
 
