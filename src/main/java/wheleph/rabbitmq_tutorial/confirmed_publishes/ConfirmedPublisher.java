@@ -1,10 +1,8 @@
 package wheleph.rabbitmq_tutorial.confirmed_publishes;
 
-import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.Method;
 import com.rabbitmq.client.ShutdownListener;
 import com.rabbitmq.client.ShutdownSignalException;
 import org.slf4j.Logger;
@@ -15,10 +13,10 @@ import java.util.concurrent.TimeoutException;
 
 public class ConfirmedPublisher {
     private static final Logger logger = LoggerFactory.getLogger(ConfirmedPublisher.class);
-
     private final static String EXCHANGE_NAME = "confirmed.publishes";
 
-    private static volatile Channel channel;
+    // Beware that proper synchronization of channel is needed because current approach may lead to race conditions
+    private volatile static Channel channel;
 
     public static void main(String[] args) throws IOException, InterruptedException, TimeoutException {
         ConnectionFactory connectionFactory = new ConnectionFactory();
@@ -41,26 +39,19 @@ public class ConfirmedPublisher {
         connection.close();
     }
 
-    private static void createChannel(Connection connection) throws IOException {
+    private static void createChannel(final Connection connection) throws IOException {
         channel = connection.createChannel();
         channel.confirmSelect();
         channel.addShutdownListener(new ShutdownListener() {
             public void shutdownCompleted(ShutdownSignalException cause) {
+                // Beware that proper synchronization is needed here
                 logger.debug("Handling channel shutdown...", cause);
-                Method reasonMethod = cause.getReason();
-                if (reasonMethod instanceof AMQP.Channel.Close) {
-                    AMQP.Channel.Close closeMethod = (AMQP.Channel.Close) reasonMethod;
-                    logger.debug("The method is of type Close (replyCode = {})", closeMethod.getReplyCode(), cause);
-                    try {
-                        if (closeMethod.getReplyCode() != 200) {
-                            // Cannot directly recreate channel here because any blocking call on connection instance here causes deadlock
-                            channel = null;
-                        }
-                    } catch (Exception e) {
-                        logger.error("Failed to create channel", e);
-                    }
+                if (cause.isInitiatedByApplication()) {
+                    logger.debug("Shutdown is initiated by application. Ignoring it.");
+                } else {
+                    logger.error("Shutdown is NOT initiated by application. Resetting the channel.");
+                    channel = null;
                 }
-                logger.error("Done handling channel shutdown...", cause);
             }
         });
     }
