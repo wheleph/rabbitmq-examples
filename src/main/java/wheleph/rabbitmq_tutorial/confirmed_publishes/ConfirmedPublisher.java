@@ -41,7 +41,7 @@ public class ConfirmedPublisher {
 
     private static void createChannel(final Connection connection) throws IOException {
         channel = connection.createChannel();
-        channel.confirmSelect();
+        channel.confirmSelect(); // This in fact is not necessary
         channel.addShutdownListener(new ShutdownListener() {
             public void shutdownCompleted(ShutdownSignalException cause) {
                 // Beware that proper synchronization is needed here
@@ -50,6 +50,9 @@ public class ConfirmedPublisher {
                     logger.debug("Shutdown is initiated by application. Ignoring it.");
                 } else {
                     logger.error("Shutdown is NOT initiated by application. Resetting the channel.");
+                    /* We cannot re-initialize channel here directly because ShutdownListener callbacks run in the connection's thread,
+                       so the call to createChannel causes a deadlock since it blocks waiting for a response (whilst the connection's thread
+                       is stuck executing the listener). */
                     channel = null;
                 }
             }
